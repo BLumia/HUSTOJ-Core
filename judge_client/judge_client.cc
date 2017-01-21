@@ -1259,6 +1259,7 @@ void copy_shell_runtime(char * work_dir) {
 	execute_cmd("/bin/mkdir %s/bin", work_dir);
 	execute_cmd("/bin/cp /lib/* %s/lib/", work_dir);
 	execute_cmd("/bin/cp -a /lib/i386-linux-gnu %s/lib/", work_dir);
+	execute_cmd("/bin/cp -a /usr/lib/i386-linux-gnu %s/lib/", work_dir);
 	execute_cmd("/bin/cp -a /lib/x86_64-linux-gnu %s/lib/", work_dir);
 	execute_cmd("/bin/cp /lib64/* %s/lib64/", work_dir);
 	execute_cmd("/bin/cp -a /lib32 %s/", work_dir);
@@ -1569,6 +1570,7 @@ void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 	// proc limit
 	switch (lang) {
 	case 3:  //java
+	case 4:  //ruby
 	case 16:
 	case 12:
 		LIM.rlim_cur = LIM.rlim_max = 50;
@@ -2203,7 +2205,7 @@ int main(int argc, char** argv) {
 	get_solution(solution_id, work_dir, lang);
 
 	//java is lucky
-	if (lang >= 3 && lang != 13 && lang != 14) {  // Clang Clang++ not VM or Script
+	if (lang >= 3 && lang != 10 && lang != 13 && lang != 14) {  // Clang Clang++ not VM or Script
 		// the limit for java
 		time_lmt = time_lmt + java_time_bonus;
 		mem_lmt = mem_lmt + java_memory_bonus;
