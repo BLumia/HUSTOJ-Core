@@ -336,9 +336,15 @@ int _get_jobs_mysql(int * jobs) {
 	res = mysql_store_result(conn);
 	int i = 0;
 	int ret = 0;
-	while ((row = mysql_fetch_row(res)) != NULL) {
+	while (res!=NULL && (row = mysql_fetch_row(res)) != NULL) {
 		jobs[i++] = atoi(row[0]);
 	}
+
+	if(res!=NULL&&!executesql("commit")){
+		mysql_free_result(res);                         // free the memory
+		res=NULL;
+	}                        
+	else i=0;
 	ret = i;
 	while (i <= max_running * 2)
 		jobs[i++] = 0;
@@ -387,7 +393,7 @@ bool _check_out_mysql(int solution_id, int result) {
 		syslog(LOG_ERR | LOG_DAEMON, "%s", mysql_error(conn));
 		return false;
 	} else {
-		if (mysql_affected_rows(conn) > 0ul)
+		if (conn!=NULL&&mysql_affected_rows(conn) > 0ul)
 			return true;
 		else
 			return false;
@@ -430,8 +436,9 @@ int work() {
 
 	//sleep_time=sleep_tmp;
 	/* get the database info */
-	if (!get_jobs(jobs))
-		retcnt = 0;
+	if (!get_jobs(jobs)){
+		return 0;
+	}
 	/* exec the submit */
 	for (int j = 0; jobs[j] > 0; j++) {
 		runid = jobs[j];
@@ -484,7 +491,10 @@ int work() {
 		printf("tmp_pid = %d\n", tmp_pid);
 	}
 	if (!http_judge) {
-		mysql_free_result(res);                         // free the memory
+		if(res!=NULL) {
+			mysql_free_result(res);                         // free the memory
+			res=NULL;
+		}
 		executesql("commit");
 	}
 	if (DEBUG && retcnt)

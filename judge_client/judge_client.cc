@@ -1102,7 +1102,10 @@ void _get_solution_mysql(int solution_id, char * work_dir, int lang) {
 		printf("Main=%s", src_pth);
 	FILE *fp_src = fopen(src_pth, "we");
 	fprintf(fp_src, "%s", row[0]);
-	mysql_free_result(res);
+	if(res!=NULL) {
+		mysql_free_result(res);                         // free the memory
+		res=NULL;
+	}
 	fclose(fp_src);
 }
 void _get_solution_http(int solution_id, char * work_dir, int lang) {
@@ -1150,7 +1153,10 @@ void _get_custominput_mysql(int solution_id, char * work_dir) {
 		fclose(fp_src);
 
 	}
-	mysql_free_result(res);
+	if(res!=NULL) {
+		mysql_free_result(res);                         // free the memory
+		res=NULL;
+	}
 }
 void _get_custominput_http(int solution_id, char * work_dir) {
 	char src_pth[BUFFER_SIZE];
@@ -1193,7 +1199,10 @@ void _get_solution_info_mysql(int solution_id, int & p_id, char * user_id,
 	p_id = atoi(row[0]);
 	strcpy(user_id, row[1]);
 	lang = atoi(row[2]);
-	mysql_free_result(res);
+	if(res!=NULL) {
+		mysql_free_result(res);                         // free the memory
+		res=NULL;
+	}
 }
 
 void _get_solution_info_http(int solution_id, int & p_id, char * user_id,
@@ -1235,7 +1244,10 @@ void _get_problem_info_mysql(int p_id, int & time_lmt, int & mem_lmt,
 	time_lmt = atoi(row[0]);
 	mem_lmt = atoi(row[1]);
 	isspj = (row[2][0] == '1');
-	mysql_free_result(res);
+	if(res!=NULL) {
+		mysql_free_result(res);                         // free the memory
+		res=NULL;
+	}
 }
 
 void _get_problem_info_http(int p_id, int & time_lmt, int & mem_lmt,
@@ -1563,6 +1575,7 @@ void copy_js_runtime(char * work_dir) {
 void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 		int & mem_lmt) {
 	nice(19);
+	int py2=execute_cmd("/bin/grep 'python2' Main.py");
 	// now the user is "judger"
 	chdir(work_dir);
 	// open the files
@@ -1660,7 +1673,11 @@ void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 		execl("/bin/bash", "/bin/bash", "Main.sh", (char *) NULL);
 		break;
 	case 6: //Python
-		execl("/python", "/python", "Main.py", (char *) NULL);
+		if(!py2){	
+			execl("/python2", "/python2", "Main.py", (char *) NULL);
+		}else{
+			execl("/python3", "/python3", "Main.py", (char *) NULL);
+		}
 		break;
 	case 7: //php
 		execl("/php", "/php", "Main.php", (char *) NULL);
@@ -2001,7 +2018,7 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
                                         " TO FIX THIS , ask admin to add the CALLID into corresponding LANG_XXV[] located at okcalls32/64.h ,\n"
                                         "and recompile judge_client. \n"
                                         "if you are admin and you don't know what to do ,\n"
-                                        " tech support can be found on http://hustoj.taobao.com\n",
+                                        "chinese explaination can be found on https://zhuanlan.zhihu.com/p/24498599\n",
                                         solution_id, (long)reg.REG_SYSCALL);
  
 			write_log(error);
@@ -2239,8 +2256,11 @@ int main(int argc, char** argv) {
 		time_lmt = time_lmt + java_time_bonus;
 		mem_lmt = mem_lmt + java_memory_bonus;
 		// copy java.policy
-		execute_cmd("/bin/cp %s/etc/java0.policy %s/java.policy", oj_home,
-				work_dir);
+		if(lang==3){
+			execute_cmd("/bin/cp %s/etc/java0.policy %s/java.policy", oj_home,work_dir);
+			execute_cmd("chmod 755 %s/java.policy", work_dir);
+			execute_cmd("chown judge %s/java.policy", work_dir);
+		}
 
 	}
 
@@ -2408,7 +2428,7 @@ int main(int argc, char** argv) {
 	if (ACflg == OJ_AC && PEflg == OJ_PE)
 		ACflg = OJ_PE;
 	if (sim_enable && ACflg == OJ_AC && (!oi_mode || finalACflg == OJ_AC)
-			&& lang < 5) { //bash don't supported
+			) { //bash don't supported
 		sim = get_sim(solution_id, lang, p_id, sim_s_id);
 	} else {
 		sim = 0;
