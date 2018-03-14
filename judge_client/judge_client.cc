@@ -108,9 +108,10 @@ static int use_max_time = 0;
 
 static int http_judge = 0;
 static char http_baseurl[BUFFER_SIZE];
-
 static char http_username[BUFFER_SIZE];
 static char http_password[BUFFER_SIZE];
+static int http_download = 1;
+
 static int shm_run = 0;
 
 static char record_call = 0;
@@ -334,6 +335,7 @@ void init_mysql_conf() {
 			read_buf(buf, "OJ_HTTP_BASEURL", http_baseurl);
 			read_buf(buf, "OJ_HTTP_USERNAME", http_username);
 			read_buf(buf, "OJ_HTTP_PASSWORD", http_password);
+			read_int(buf, "OJ_HTTP_DOWNLOAD", &http_download);
 			read_int(buf, "OJ_OI_MODE", &oi_mode);
 			read_int(buf, "OJ_FULL_DIFF", &full_diff);
 			read_int(buf, "OJ_SHM_RUN", &shm_run);
@@ -1181,6 +1183,8 @@ void _get_solution_http(int solution_id, char * work_dir, int lang) {
 
 }
 void get_solution(int solution_id, char * work_dir, int lang) {
+	char src_pth[BUFFER_SIZE];
+	sprintf(src_pth, "Main.%s", lang_ext[lang]);
 	if (http_judge) {
 		_get_solution_http(solution_id, work_dir, lang);
 	} else {
@@ -1189,6 +1193,7 @@ void get_solution(int solution_id, char * work_dir, int lang) {
 		_get_solution_mysql(solution_id, work_dir, lang);
 #endif
 	}
+	execute_cmd("chown judge %s/%s", work_dir,src_pth);
 
 }
 
@@ -1651,9 +1656,17 @@ void copy_lua_runtime(char * work_dir) {
 }
 void copy_js_runtime(char * work_dir) {
 
-//	copy_shell_runtime(work_dir);
-	execute_cmd("/bin/mkdir -p %s/usr/lib /lib/i386-linux-gnu/", work_dir);
+	//copy_shell_runtime(work_dir);
+        execute_cmd("mkdir -p %s/dev", work_dir);
+	execute_cmd("/bin/mount -o bind /dev %s/dev", work_dir);
+	execute_cmd("/bin/mkdir -p %s/usr/lib %s/lib/i386-linux-gnu/ %s/lib64/", work_dir, work_dir, work_dir);
         execute_cmd("/bin/cp /lib/i386-linux-gnu/libz.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/i386-linux-gnu/libuv.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/i386-linux-gnu/libicui18n.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/i386-linux-gnu/libicuuc.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/i386-linux-gnu/libicudata.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/i386-linux-gnu/libtinfo.so.*  %s/lib/i386-linux-gnu/", work_dir);
+	
         execute_cmd("/bin/cp /usr/lib/i386-linux-gnu/libcares.so.*  %s/lib/i386-linux-gnu/", work_dir);
         execute_cmd("/bin/cp /usr/lib/libv8.so.*  %s/lib/i386-linux-gnu/", work_dir);
         execute_cmd("/bin/cp /lib/i386-linux-gnu/libssl.so.*  %s/lib/i386-linux-gnu/", work_dir);
@@ -1665,24 +1678,27 @@ void copy_js_runtime(char * work_dir) {
         execute_cmd("/bin/cp /lib/i386-linux-gnu/libc.so.6  %s/lib/i386-linux-gnu/", work_dir);
         execute_cmd("/bin/cp /lib/i386-linux-gnu/libm.so.6  %s/lib/i386-linux-gnu/", work_dir);
         execute_cmd("/bin/cp /lib/i386-linux-gnu/libgcc_s.so.1  %s/lib/i386-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/ld-linux.so.*  %s/lib/i386-linux-gnu/", work_dir);
+        execute_cmd("/bin/cp /lib/ld-linux.so.*  %s/lib/", work_dir);
 
-	execute_cmd("/bin/mkdir -p %s/usr/lib /lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libz.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libcares.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /usr/lib/libv8.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libssl.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libcrypto.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libdl.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/librt.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libstdc++.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libpthread.so.*  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libc.so.6  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libm.so.6  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libgcc_s.so.1  %s/lib/x86_64-linux-gnu/", work_dir);
-        execute_cmd("/bin/cp /lib64/ld-linux-x86-64.so.2  %s/lib/x86_64-linux-gnu/", work_dir);
-	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libcares* %s/usr/lib/",work_dir);
+	execute_cmd("/bin/mkdir -p %s/usr/lib %s/lib/x86_64-linux-gnu/", work_dir, work_dir);
 	
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libz.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libuv.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/librt.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libpthread.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libdl.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libssl.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libcrypto.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libicui18n.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libicuuc.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libstdc++.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libm.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libgcc_s.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib/x86_64-linux-gnu/libc.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+	execute_cmd("/bin/cp /lib64/ld-linux-x86-64.so.* %s/lib64/", work_dir);
+	execute_cmd("/bin/cp /usr/lib/x86_64-linux-gnu/libicudata.so.* %s/lib/x86_64-linux-gnu/", work_dir);
+
+
 	execute_cmd("/bin/cp /usr/bin/nodejs %s/", work_dir);
 
 }
@@ -1722,7 +1738,7 @@ void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 	//if(DEBUG) printf("LIM_CPU=%d",(int)(LIM.rlim_cur));
 	setrlimit(RLIMIT_CPU, &LIM);
 	alarm(0);
-	alarm(time_lmt * 10);
+	alarm(time_lmt * 5 );
 
 	// file limit
 	LIM.rlim_max = STD_F_LIM + STD_MB;
@@ -1730,13 +1746,13 @@ void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 	setrlimit(RLIMIT_FSIZE, &LIM);
 	// proc limit
 	switch (lang) {
-	case 17:  
+	case 17: 
+	case 9: //C#	
 		LIM.rlim_cur = LIM.rlim_max = 280;
 		break;
 	case 3:  //java
 	case 4:  //ruby
 	//case 6:  //python
-	case 9: //C#
 	case 12:
 	case 16:
 		LIM.rlim_cur = LIM.rlim_max = 80;
@@ -2423,7 +2439,7 @@ int main(int argc, char** argv) {
 	DIR *dp;
 	dirent *dirp;
 	// using http to get remote test data files
-	if (p_id > 0 && http_judge)
+	if (p_id > 0 && http_judge && http_download)
 		get_test_file(work_dir, p_id);
 	if (p_id > 0 && (dp = opendir(fullpath)) == NULL) {
 
@@ -2504,7 +2520,7 @@ int main(int argc, char** argv) {
 		if (namelen == 0)
 			continue;
 
-		if(http_judge&&(!data_list_has(dirp->d_name))) 
+		if(http_judge&&http_download&&(!data_list_has(dirp->d_name))) 
 			continue;
 	
 		prepare_files(dirp->d_name, namelen, infile, p_id, work_dir, outfile,
