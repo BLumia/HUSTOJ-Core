@@ -1,6 +1,4 @@
-//
-#define IGNORE_ESOL
-// File:   main.cc
+// File:   judge_client.cc
 // Author: sempr
 // refacted by zhblue
 /*
@@ -49,11 +47,12 @@
 #include <assert.h>
 #include "okcalls.h"
 
-#define STD_MB 1048576
+#define IGNORE_ESOL   //ignore the ending space char of lines while comparing
+#define STD_MB 1048576LL
 #define STD_T_LIM 2
-#define STD_F_LIM (STD_MB<<5)
-#define STD_M_LIM (STD_MB<<7)
-#define BUFFER_SIZE 5120
+#define STD_F_LIM (STD_MB<<5)  //default file size limit 32m ,2^5=32
+#define STD_M_LIM (STD_MB<<7)  //default memory limit 128m ,2^7=128
+#define BUFFER_SIZE 5120       //default size of char buffer 5120 bytes
 
 #define OJ_WT0 0
 #define OJ_WT1 1
@@ -111,6 +110,7 @@ static char http_baseurl[BUFFER_SIZE];
 static char http_username[BUFFER_SIZE];
 static char http_password[BUFFER_SIZE];
 static int http_download = 1;
+static double cpu_compensation=1.0;
 
 static int shm_run = 0;
 
@@ -156,8 +156,10 @@ long get_file_size(const char * filename) {
 	return (long) f_stat.st_size;
 }
 
-void write_log(const char *fmt, ...) {
+void write_log(const char *_fmt, ...) {
 	va_list ap;
+	char fmt[4096];
+	strncpy(fmt,_fmt,4096);
 	char buffer[4096];
 	//      time_t          t = time(NULL);
 	//int l;
@@ -167,7 +169,7 @@ void write_log(const char *fmt, ...) {
 		fprintf(stderr, "openfile error!\n");
 		system("pwd");
 	}
-	va_start(ap, fmt);
+	va_start(ap, _fmt);
 	//l = 
 	vsprintf(buffer, fmt, ap);
 	fprintf(fp, "%s\n", buffer);
@@ -192,7 +194,8 @@ int execute_cmd(const char * fmt, ...) {
 }
 
 const int call_array_size = 512;
-int call_counter[call_array_size] = { 0 };
+unsigned int call_id=0;
+unsigned int call_counter[call_array_size] = { 0 };
 static char LANG_NAME[BUFFER_SIZE];
 void init_syscalls_limits(int lang) {
 	int i;
@@ -282,11 +285,16 @@ bool read_buf(char * buf, const char * key, char * value) {
 	}
 	return 0;
 }
+void read_double(char * buf, const char * key,double * value) {
+	char buf2[BUFFER_SIZE];
+	if (read_buf(buf, key, buf2))
+		sscanf(buf2, "%lf", value);
+}
+
 void read_int(char * buf, const char * key, int * value) {
 	char buf2[BUFFER_SIZE];
 	if (read_buf(buf, key, buf2))
 		sscanf(buf2, "%d", value);
-
 }
 
 FILE * read_cmd_output(const char * fmt, ...) {
@@ -343,6 +351,7 @@ void init_mysql_conf() {
 			read_int(buf, "OJ_USE_PTRACE", &use_ptrace);
 			read_int(buf, "OJ_COMPILE_CHROOT", &compile_chroot);
 			read_int(buf, "OJ_TURBO_MODE", &turbo_mode);
+			read_double(buf, "OJ_CPU_COMPENSATION", &cpu_compensation);
 
 		}
 		//fclose(fp);
@@ -924,8 +933,8 @@ void umount(char * work_dir){
 int compile(int lang,char * work_dir) {
 	int pid;
 
-	const char * CP_C[] = { "gcc", "Main.c", "-o", "Main", "-fno-asm", "-Wall",
-			"-lm", "--static", "-std=c99", "-DONLINE_JUDGE", NULL };
+	const char * CP_C[] = { "gcc", "Main.c", "-o", "Main", "-Wall",
+			"-lm", "--static", "-DONLINE_JUDGE", NULL };
 	const char * CP_X[] = { "g++", "-fno-asm", "-Wall",
 			"-lm", "--static", "-std=c++11", "-DONLINE_JUDGE", "-o", "Main", "Main.cc", NULL };
 	const char * CP_P[] =
@@ -969,17 +978,24 @@ int compile(int lang,char * work_dir) {
 	pid = fork();
 	if (pid == 0) {
 		struct rlimit LIM;
-		LIM.rlim_max = 6;
-		LIM.rlim_cur = 6;
+		int cpu=6;
+		if (lang==3) cpu=30;
+		LIM.rlim_max = cpu;
+		LIM.rlim_cur = cpu;
 		setrlimit(RLIMIT_CPU, &LIM);
-		alarm(6);
-		LIM.rlim_max = 10 * STD_MB;
-		LIM.rlim_cur = 10 * STD_MB;
+		alarm(cpu);
+		LIM.rlim_max = 40 * STD_MB;
+		LIM.rlim_cur = 40 * STD_MB;
 		setrlimit(RLIMIT_FSIZE, &LIM);
 
 		if(lang==3||lang==17){
+#ifdef __i386
 		   LIM.rlim_max = STD_MB <<11;
 		   LIM.rlim_cur = STD_MB <<11;	
+#else
+		   LIM.rlim_max = STD_MB <<12;
+		   LIM.rlim_cur = STD_MB <<12;	
+#endif
                 }else{
 		   LIM.rlim_max = STD_MB *512 ;
 		   LIM.rlim_cur = STD_MB *512 ;
@@ -1731,14 +1747,14 @@ void run_solution(int & lang, char * work_dir, int & time_lmt, int & usedtime,
 	struct rlimit LIM; // time limit, file limit& memory limit
 	// time limit
 	if (oi_mode)
-		LIM.rlim_cur = time_lmt + 1;
+		LIM.rlim_cur = time_lmt/cpu_compensation + 1;
 	else
-		LIM.rlim_cur = (time_lmt - usedtime / 1000) + 1;
+		LIM.rlim_cur = (time_lmt/cpu_compensation  - usedtime / 1000) + 1;
 	LIM.rlim_max = LIM.rlim_cur;
 	//if(DEBUG) printf("LIM_CPU=%d",(int)(LIM.rlim_cur));
 	setrlimit(RLIMIT_CPU, &LIM);
 	alarm(0);
-	alarm(time_lmt * 5 );
+	alarm(time_lmt * 5 / cpu_compensation);
 
 	// file limit
 	LIM.rlim_max = STD_F_LIM + STD_MB;
@@ -2008,7 +2024,7 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 		int & topmemory, int mem_lmt, int & usedtime, int time_lmt, int & p_id,
 		int & PEflg, char * work_dir) {
 	// parent
-	int tempmemory;
+	int tempmemory=0;
 
 	if (DEBUG)
 		printf("pid=%d judging %s\n", pidApp, infile);
@@ -2016,12 +2032,20 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 	int status, sig, exitcode;
 	struct user_regs_struct reg;
 	struct rusage ruse;
-	if(topmemory==0) 
-			topmemory= get_proc_status(pidApp, "VmRSS:") << 10;
+	int first = true;
 	while (1) {
 		// check the usage
 
-		wait4(pidApp, &status, 0, &ruse);
+		wait4(pidApp, &status, __WALL, &ruse);
+		if(first){ // 
+			ptrace(PTRACE_SETOPTIONS, pidApp, NULL, PTRACE_O_TRACESYSGOOD 
+								|PTRACE_O_TRACEEXIT 
+							//	|PTRACE_O_EXITKILL 
+							//	|PTRACE_O_TRACECLONE 
+							//	|PTRACE_O_TRACEFORK 
+							//	|PTRACE_O_TRACEVFORK
+			);
+		} 
 
 //jvm gc ask VM before need,so used kernel page fault times and page size
 		if (lang == 3 || lang == 7 || lang == 16 || lang==9 ||lang==17) {
@@ -2060,8 +2084,9 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 
 		exitcode = WEXITSTATUS(status);
 		/*exitcode == 5 waiting for next CPU allocation          * ruby using system to run,exit 17 ok
-		 *  */
-		if ((lang >= 3 && exitcode == 17) || exitcode == 0x05 || exitcode == 0)
+		 *  Runtime Error:Unknown signal xxx need be added here  
+                 */
+		if ((lang >= 3 && exitcode == 17) || exitcode == 0x05 || exitcode == 0 || exitcode == 133 )
 			//go on and on
 			;
 		else {
@@ -2077,9 +2102,12 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 				case SIGCHLD:
 				case SIGALRM:
 					alarm(0);
+					if(DEBUG) printf("alarm:%d\n",time_lmt);
 				case SIGKILL:
 				case SIGXCPU:
 					ACflg = OJ_TL;
+					usedtime=time_lmt*1000;
+					if(DEBUG) printf("TLE:%d\n",usedtime);
 					break;
 				case SIGXFSZ:
 					ACflg = OJ_OL;
@@ -2135,21 +2163,22 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 
 		// check the system calls
 		ptrace(PTRACE_GETREGS, pidApp, NULL, &reg);
-		if (call_counter[reg.REG_SYSCALL] ){
+		call_id=(unsigned int)reg.REG_SYSCALL % call_array_size;
+		if (call_counter[call_id] ){
 			//call_counter[reg.REG_SYSCALL]--;
 		}else if (record_call) {
-			call_counter[reg.REG_SYSCALL] = 1;
+			call_counter[call_id] = 1;
 		
 		}else { //do not limit JVM syscall for using different JVM
 			ACflg = OJ_RE;
 			char error[BUFFER_SIZE];
 			sprintf(error,
-                                        "[ERROR] A Not allowed system call: runid:%d CALLID:%ld\n"
+                                        "[ERROR] A Not allowed system call: runid:%d CALLID:%u\n"
                                         " TO FIX THIS , ask admin to add the CALLID into corresponding LANG_XXV[] located at okcalls32/64.h ,\n"
                                         "and recompile judge_client. \n"
                                         "if you are admin and you don't know what to do ,\n"
                                         "chinese explaination can be found on https://zhuanlan.zhihu.com/p/24498599\n",
-                                        solution_id, (long)reg.REG_SYSCALL);
+                                        solution_id, call_id);
  
 			write_log(error);
 			print_runtimeerror(error);
@@ -2158,9 +2187,10 @@ void watch_solution(pid_t pidApp, char * infile, int & ACflg, int isspj,
 		
 
 		ptrace(PTRACE_SYSCALL, pidApp, NULL, NULL);
+		first = false;
 	}
-	usedtime += (ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000);
-	usedtime += (ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000);
+	usedtime += (ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000) * cpu_compensation;
+	usedtime += (ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000) * cpu_compensation;
 	
 	//clean_session(pidApp);
 }
@@ -2499,7 +2529,7 @@ int main(int argc, char** argv) {
 					p_id, PEflg, work_dir);
 
 		}
-		if (ACflg == OJ_TL) {
+		if (finalACflg == OJ_TL) {
 			usedtime = time_lmt * 1000;
 		}
 		if (ACflg == OJ_RE) {
@@ -2579,8 +2609,10 @@ int main(int argc, char** argv) {
 	if (use_max_time) {
 		usedtime = max_case_time;
 	}
-	if (ACflg == OJ_TL) {
+	if (finalACflg == OJ_TL ) {
 		usedtime = time_lmt * 1000;
+		if (DEBUG)
+                        printf("usedtime:%d\n",usedtime);
 	}
 	if (oi_mode) {
 		if (num_of_test > 0)
